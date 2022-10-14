@@ -1,8 +1,10 @@
 import os
 import argparse
+import random
 import shutil
 from tqdm import tqdm
 
+import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
@@ -14,31 +16,31 @@ from utils.loader import load_data
 
 def main():
     parser = argparse.ArgumentParser(description='')
-    parser.add_argument('--model_name',
-                        default='',
-                        type=str,
-                        help='model name')
+    parser.add_argument('--model_name', type=str, default='GCN')
     parser.add_argument('--data_name', default='', type=str, help='datas name')
-    parser.add_argument('--in_channels',
-                        default='',
-                        type=int,
-                        help='in channels')
-    parser.add_argument('--num_classes',
-                        default='',
-                        type=int,
-                        help='num classes')
-    parser.add_argument('--num_epochs',
-                        default=200,
-                        type=int,
-                        help='num epochs')
+    parser.add_argument('--seed', type=int, default=100)
+
+    parser.add_argument('--epochs', type=int, default=200)
+    parser.add_argument('--in_channels', type=int, default=4)
+    parser.add_argument('--n_class', type=int, default=2)
+
+    # parser.add_argument('--hidden_channels', type=int, default=128)
+    # parser.add_argument('--dropout', type=float, default=0.5)
+    # parser.add_argument('--lr', type=float, default=0.01)
+    # parser.add_argument('--weight_decay', type=float, default=0.005)
+    parser.add_argument('--batch_size', type=int, default=64)
+
     parser.add_argument('--model_dir', default='', type=str, help='model dir')
     parser.add_argument('--data_dir', default='', type=str, help='datas dir')
     parser.add_argument('--log_dir', default='', type=str, help='log dir')
-    parser.add_argument('--device_index',
-                        default='0',
-                        type=str,
-                        help='device index')
+    parser.add_argument('--device_index', type=str, default='0')
     args = parser.parse_args()
+
+    # fix all seeds
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed_all(args.seed)
 
     # ----------------------------------------
     # basic configuration
@@ -51,12 +53,10 @@ def main():
     if os.path.exists(args.log_dir):
         shutil.rmtree(args.log_dir, ignore_errors=True)
 
-    batch_size = 16
-
     print('-' * 50)
     print('DEVICE:', device)
-    print('EPOCH:', args.num_epochs)
-    print('BATCH SIZE:', batch_size)
+    print('EPOCH:', args.epochs)
+    print('BATCH SIZE:', args.batch_size)
     print('MODEL DIR:', args.model_dir)
     print('LOG DIR:', args.log_dir)
     print('-' * 50)
@@ -66,10 +66,11 @@ def main():
     # ----------------------------------------
     train_loader, val_loader, test_loader = load_data(args.data_dir,
                                                       args.data_name,
-                                                      batch_size, 'gc')
+                                                      args.batch_size, 'gc')
 
-    model = models.load_model(args.model_name, args.in_channels,
-                              args.num_classes, 'gc')
+    model = models.load_model(args.model_name, args.in_channels, args.n_class,
+                              'gc')
+    modules = models.load_modules(model)
     model.to(device)
     print(model)
 
@@ -77,8 +78,8 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(),
                                  lr=0.01,
                                  weight_decay=5e-4)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer=optimizer, T_max=args.num_epochs)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer,
+                                                           T_max=args.epochs)
 
     writer = SummaryWriter(args.log_dir)
 
@@ -90,10 +91,10 @@ def main():
     best_acc = None
     best_epoch = None
 
-    for epoch in tqdm(range(args.num_epochs)):
+    for epoch in tqdm(range(args.epochs)):
         loss, acc1, auc_ap, class_acc = train(model, train_loader, criterion,
                                               optimizer, device)
-        auc, ap = auc_ap(args.num_classes == 2)
+        auc, ap = auc_ap(args.n_class == 2)
         macc = class_acc().mean()
         writer.add_scalar(tag='train loss',
                           scalar_value=loss,
@@ -109,17 +110,13 @@ def main():
 
         loss, acc1, auc_ap, class_acc = test(model, val_loader, criterion,
                                              device)
-        auc, ap = auc_ap(args.num_classes == 2)
+        auc, ap = auc_ap(args.n_class == 2)
         macc = class_acc().mean()
-        writer.add_scalar(tag='val loss',
-                          scalar_value=loss,
-                          global_step=epoch)
+        writer.add_scalar(tag='val loss', scalar_value=loss, global_step=epoch)
         # writer.add_scalar(tag='val auc', scalar_value=auc, global_step=epoch)
         # writer.add_scalar(tag='val ap', scalar_value=ap, global_step=epoch)
         writer.add_scalar(tag='val acc', scalar_value=acc1, global_step=epoch)
-        writer.add_scalar(tag='val macc',
-                          scalar_value=macc,
-                          global_step=epoch)
+        writer.add_scalar(tag='val macc', scalar_value=macc, global_step=epoch)
 
         # ----------------------------------------
         # save best model
@@ -136,14 +133,14 @@ def main():
     loss, acc1, auc_ap, class_acc = test(best_model, test_loader, criterion,
                                          device)
     macc = class_acc().mean()
-    auc, ap = auc_ap(args.num_classes == 2)
+    auc, ap = auc_ap(args.n_class == 2)
 
     torch.save(best_model, os.path.join(args.model_dir, 'model_ori.pth'))
     print('COMPLETE !!!')
     print('BEST EPOCH', best_epoch)
     print('BEST VAL mACC', best_macc)
     print('BEST VAL ACC', best_acc)
-    print('-'*10)
+    print('-' * 10)
     print('TEST mACC', macc)
     print('TEST ACC', acc1)
     print(class_acc)
@@ -165,6 +162,7 @@ def train(model, loader, criterion, optimizer, device):
 
     for i, data in enumerate(loader):
         data = data.to(device)
+        # print(len(data), len(data.x), len(data.y))
         outputs = model(data.x, data.edge_index, data.batch)
         loss = criterion(outputs, data.y)
         acc1 = metrics.accuracy(outputs, data.y)[0]

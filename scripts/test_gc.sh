@@ -7,12 +7,12 @@ export model_name='GCN'
 
 # export data_name='NEU-CLS'
 # export in_channels=4
-# export num_classes=6
+# export n_class=6
 # export num_epochs=500
 
 export data_name='NEU-CLS-64'
 export in_channels=4
-export num_classes=9
+export n_class=9
 
 
 export exp_name=${model_name}'_gc_'${data_name}
@@ -25,7 +25,7 @@ python test_gc.py \
   --model_name ${model_name} \
   --data_name ${data_name} \
   --in_channels ${in_channels} \
-  --num_classes ${num_classes} \
+  --n_class ${n_class} \
   --model_dir ${model_dir} \
   --data_dir ${data_dir} \
   --log_dir ${log_dir} \

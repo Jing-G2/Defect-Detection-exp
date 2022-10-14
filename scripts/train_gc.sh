@@ -5,20 +5,28 @@ export result_path='/nfs4-p1/gj/DEFECT2022/results/'
 export model_name='GCN'
 # export model_name='SAGE'
 
+
 # export data_name='NEU-CLS'
 # export in_channels=4
-# export num_classes=6
-# export num_epochs=500
+# export n_class=6
+# export epochs=500
 
 # export data_name='NEU-CLS-64'
 # export in_channels=4
-# export num_classes=9
-# export num_epochs=200
+# export hidden_channels=16
+# export n_class=9
+# export epochs=200
 
-export data_name='KSDD'
+# export data_name='KSDD'
+
+export data_name='CrackForest'
 export in_channels=4
-export num_classes=2
-export num_epochs=200
+# export hidden_channels=16
+export n_class=2
+export epochs=200
+
+export seed=100
+export batch_size=32
 
 export exp_name=${model_name}'_gc_'${data_name}
 export model_dir=${result_path}${exp_name}'/models'
@@ -29,9 +37,11 @@ export device_index='1'
 python train_gc.py \
   --model_name ${model_name} \
   --data_name ${data_name} \
+  --seed ${seed} \
+  --batch_size ${batch_size} \
+  --epochs ${epochs} \
   --in_channels ${in_channels} \
-  --num_classes ${num_classes} \
-  --num_epochs ${num_epochs} \
+  --n_class ${n_class} \
   --model_dir ${model_dir} \
   --data_dir ${data_dir} \
   --log_dir ${log_dir} \
