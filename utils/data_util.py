@@ -13,6 +13,8 @@ def upsample(dataset):
             continue
 
         up_sample_ratio = max_num_class_graph / num_class_graph[i]
+        print('up_sample_ratio:', up_sample_ratio)
+
         up_sample_num = int(num_class_graph[i] * up_sample_ratio -
                             num_class_graph[i])
 

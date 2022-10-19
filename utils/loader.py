@@ -22,7 +22,7 @@ def load_data(data_dir, data_name, batch_size, tpye='gc'):
     test_dataset = []
     graph_num = 0
 
-    for class_name in class_names:
+    for i, class_name in enumerate(class_names):
         nodes_files = glob.glob(
             os.path.join(data_dir, data_name, class_name, f'*_nodes.csv'))
         edges_files = glob.glob(
@@ -30,11 +30,11 @@ def load_data(data_dir, data_name, batch_size, tpye='gc'):
         print(class_name + ' #graph:', len(nodes_files))
 
         dataset = []
-        for node_files, edges_file in zip(nodes_files, edges_files):
+        for node_files, edges_file in zip(sorted(nodes_files), sorted(edges_files)):
             x = load_nodes(node_files, 4)
             edge_index = load_edges(edges_file)
-            assert x.max() >= edge_index.max(), "{}, {}, {}, {}".format(
-                node_files, edges_file, x.max(), edge_index.max())
+            assert len(x) >= edge_index.max(), "{}, {}, {}, {}".format(
+                node_files, edges_file, len(x), edge_index.max())
             y = class_names.index(class_name)
             assert y < 2
             data = Data(x=x, edge_index=edge_index, y=y)
@@ -43,12 +43,13 @@ def load_data(data_dir, data_name, batch_size, tpye='gc'):
             dataset.append(data)
 
         random.shuffle(dataset)
-        train_dataset += dataset[:int(len(dataset) * 0.6)]
-        val_dataset += dataset[int(len(dataset) * 0.6):int(len(dataset) * 0.8)]
+        train_ratio = 0.6 #if i == 0 else 0.1
+        train_dataset += dataset[:int(len(dataset) * train_ratio)]
+        val_dataset += dataset[int(len(dataset) * train_ratio):int(len(dataset) * 0.8)]
         test_dataset += dataset[int(len(dataset) * 0.8):]
 
     # upsample for train_dataset and val_dataset
-    # train_dataset = upsample(train_dataset)
+    train_dataset = upsample(train_dataset)
 
     random.shuffle(train_dataset)
     random.shuffle(val_dataset)
@@ -71,7 +72,7 @@ def load_data(data_dir, data_name, batch_size, tpye='gc'):
 
 
 def load_nodes(nodes_dir, num_nodes_feature=4):
-    nodes = pd.read_csv(nodes_dir, usecols=range(0, num_nodes_feature + 1))
+    nodes = pd.read_csv(nodes_dir, usecols=range(1, num_nodes_feature + 1))
     x = nodes.to_numpy(np.float32)
     # print('x shape:',x.shape)
     x = torch.from_numpy(x).cuda()

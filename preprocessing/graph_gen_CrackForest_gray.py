@@ -5,19 +5,11 @@ import numpy as np
 import cv2
 import pandas as pd
 import multiprocessing as mp
-import warnings
-
-warnings.filterwarnings("ignore")
 from math import ceil
 from sklearn.cluster import KMeans
-from sklearn.manifold import TSNE
-from sklearn.metrics import pairwise_distances
-from colormath.color_objects import sRGBColor, LabColor
-from colormath.color_conversions import convert_color
-from colormath.color_diff import delta_e_cie2000
 
 datasets_root = "/nfs4-p1/gj/datasets/AnomalyDetection"
-graph_data_root = "/nfs4-p1/gj/DEFECT2022/data0/"
+graph_data_root = "/nfs4-p1/gj/DEFECT2022/data1/"
 class_names = ['Normal', 'Anomalous']
 
 dataset_name = "CrackForest"
@@ -25,37 +17,17 @@ unit_size = 8
 color_unit_size = 16
 
 
-def color_difference(color1, color2):
-    rgb_color1 = sRGBColor(rgb_r=color1[0],
-                           rgb_g=color1[1],
-                           rgb_b=color1[2],
-                           is_upscaled=True)
-    rgb_color2 = sRGBColor(rgb_r=color2[0],
-                           rgb_g=color2[1],
-                           rgb_b=color2[2],
-                           is_upscaled=True)
-    lab_color1 = convert_color(rgb_color1, LabColor)
-    lab_color2 = convert_color(rgb_color2, LabColor)
-    delta_e = delta_e_cie2000(lab_color1, lab_color2)
-    # fix no asscalar problem by replacing by ndarray.item
-    return delta_e
-
-
 def func(img, img_name, class_index):
     height, width = img.shape[0], img.shape[1]
+    # img = ((img - img.min()) /
+    #        (img.max() - img.min() + 1e-5) * color_unit_size)
 
-    colors, counts = np.unique(img.reshape(-1, 3), return_counts=True, axis=0)
-    distances = pairwise_distances(colors, metric=color_difference)
-    tsne = TSNE(n_components=1, metric='precomputed',learning_rate='auto', n_iter=500)
-    tsne_result = tsne.fit_transform(distances)
-    min_tsne = tsne_result.min()
-    max_tsne = tsne_result.max()
-
-    km = KMeans(n_clusters=16)
-    cluster  = km.fit_predict(tsne_result)
-    # ----------------------------------------------------------
     patch_x_max = ceil(height / unit_size)
     patch_y_max = ceil(width / unit_size)
+
+    colors = np.unique(img)
+    km = KMeans(n_clusters=16)
+    cluster = km.fit_predict(colors.reshape(-1, 1))
 
     nodes = []
     # divide the whole image into several patch
@@ -72,29 +44,19 @@ def func(img, img_name, class_index):
                                                     1) * unit_size >= width:
                 patch = img[i * unit_size:, j * unit_size:]
 
-            if len(patch.shape) > 2:  # rgb
-                uni_c, counts = np.unique(patch.reshape(-1, 3),
-                                          return_counts=True,
-                                          axis=0)
-            else:  # gray
-                uni_c, counts = np.unique(patch, return_counts=True)
+            uni_c, counts = np.unique(patch, return_counts=True)
 
             # define each patch as a node in the graph
             for c, count in zip(uni_c, counts):
-                density = count / (patch.shape[0] * patch.shape[1])
+                density = count / patch.size
                 if density < 0.05:
                     continue
                 cur_node = dict()
                 cur_node['i'] = np.array(i)
                 cur_node['j'] = np.array(j)
                 cur_node['density'] = density * unit_size * unit_size
-
-                color_index = np.nonzero(
-                    np.abs((colors - c)).sum(axis=-1) == 0)[0][0]
-                # cur_node['c'] = (
-                #     (tsne_result[color_index][0] - min_tsne) /
-                #     (max_tsne - min_tsne + 1e-5) * color_unit_size) // 1
-                cur_node['c'] = cluster[color_index]
+                color_index =np.nonzero(np.abs((colors - c)) == 0)[0][0]
+                cur_node['c'] = np.array(cluster[color_index])
 
                 nodes.append(cur_node)
 
@@ -135,25 +97,22 @@ def func(img, img_name, class_index):
 
 def img_convert(groundTruth, image):
     gt = scio.loadmat(groundTruth)['groundTruth'][0, 0][0]
-    img = cv2.cvtColor(cv2.imread(image), cv2.COLOR_BGR2RGB)
+    img = cv2.cvtColor(cv2.imread(image), cv2.COLOR_BGR2GRAY)
 
     img_name = image.split('/')[-1].split('.')[0]
-    patch_size = 80
 
     # split the whole image(320*480) into 6 patches (80*80)
-    for i in range(320 // patch_size):
-        for j in range(480 // patch_size):
-            img_patch = img[i * patch_size:(i + 1) * patch_size,
-                            j * patch_size:(j + 1) * patch_size]
-            gt_patch = gt[i * patch_size:(i + 1) * patch_size,
-                          j * patch_size:(j + 1) * patch_size]
+    for i in range(320 // 80):
+        for j in range(480 // 80):
+            img_patch = img[i * 80:(i + 1) * 80, j * 80:(j + 1) * 80]
+            gt_patch = gt[i * 80:(i + 1) * 80, j * 80:(j + 1) * 80]
             class_index = 1 if 2 in np.unique(gt_patch) else 0
             patch_name = img_name + '_{}_{}'.format(i, j)
 
             func(img_patch, patch_name, class_index)
 
             # cv2.imwrite(
-            #     os.path.join(datasets_root, dataset_name,|
+            #     os.path.join(datasets_root, dataset_name,
             #                  class_names[class_index], patch_name + '.jpg'),
             #     img_patch)
     print(img_name)
