@@ -9,7 +9,7 @@ import warnings
 
 warnings.filterwarnings("ignore")
 from math import ceil
-from sklearn.cluster import KMeans
+# from sklearn.cluster import KMeans
 from sklearn.manifold import TSNE
 from sklearn.metrics import pairwise_distances
 from colormath.color_objects import sRGBColor, LabColor
@@ -51,8 +51,8 @@ def func(img, img_name, class_index):
     min_tsne = tsne_result.min()
     max_tsne = tsne_result.max()
 
-    km = KMeans(n_clusters=16)
-    cluster  = km.fit_predict(tsne_result)
+    # km = KMeans(n_clusters=16)
+    # cluster  = km.fit_predict(tsne_result)
     # ----------------------------------------------------------
     patch_x_max = ceil(height / unit_size)
     patch_y_max = ceil(width / unit_size)
@@ -81,20 +81,19 @@ def func(img, img_name, class_index):
 
             # define each patch as a node in the graph
             for c, count in zip(uni_c, counts):
-                density = count / (patch.shape[0] * patch.shape[1])
-                if density < 0.05:
+                if count / (patch.shape[0] * patch.shape[1]) < 0.05:
                     continue
                 cur_node = dict()
                 cur_node['i'] = np.array(i)
                 cur_node['j'] = np.array(j)
-                cur_node['density'] = density * unit_size * unit_size
+                cur_node['density'] = count
 
                 color_index = np.nonzero(
                     np.abs((colors - c)).sum(axis=-1) == 0)[0][0]
-                # cur_node['c'] = (
-                #     (tsne_result[color_index][0] - min_tsne) /
-                #     (max_tsne - min_tsne + 1e-5) * color_unit_size) // 1
-                cur_node['c'] = cluster[color_index]
+                cur_node['c'] = (
+                    (tsne_result[color_index][0] - min_tsne) /
+                    (max_tsne - min_tsne + 1e-5) * color_unit_size) // 1
+                # cur_node['c'] = cluster[color_index]
 
                 nodes.append(cur_node)
 

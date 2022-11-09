@@ -70,7 +70,7 @@ def main():
 
     model = models.load_model(args.model_name, args.in_channels, args.n_class,
                               'gc')
-    modules = models.load_modules(model)
+    # modules = models.load_modules(model)
     model.to(device)
     print(model)
 

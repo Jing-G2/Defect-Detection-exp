@@ -14,20 +14,22 @@ class_names = ['Normal', 'Anomalous']
 
 dataset_name = "CrackForest"
 unit_size = 8
-color_unit_size = 16
+color_unit_size = 8
+
+min_c = 28
+max_c = 245
 
 
 def func(img, img_name, class_index):
     height, width = img.shape[0], img.shape[1]
+    img = ((img - min_c) / (max_c - min_c + 1e-5)) * color_unit_size // 1
     # img = ((img - img.min()) /
-    #        (img.max() - img.min() + 1e-5) * color_unit_size)
+    #        (img.max() - img.min() + 1e-5)) * color_unit_size // 1
 
     patch_x_max = ceil(height / unit_size)
     patch_y_max = ceil(width / unit_size)
 
     colors = np.unique(img)
-    km = KMeans(n_clusters=16)
-    cluster = km.fit_predict(colors.reshape(-1, 1))
 
     nodes = []
     # divide the whole image into several patch
@@ -48,15 +50,18 @@ def func(img, img_name, class_index):
 
             # define each patch as a node in the graph
             for c, count in zip(uni_c, counts):
-                density = count / patch.size
-                if density < 0.05:
+                cur_node = dict()
+                # if c < min_c or c > max_c or count / (patch.shape[0] *
+                #                                       patch.shape[1]) < 0.05:
+                if count / (patch.shape[0] * patch.shape[1]) < 0.05:
                     continue
                 cur_node = dict()
                 cur_node['i'] = np.array(i)
                 cur_node['j'] = np.array(j)
-                cur_node['density'] = density * unit_size * unit_size
-                color_index =np.nonzero(np.abs((colors - c)) == 0)[0][0]
-                cur_node['c'] = np.array(cluster[color_index])
+                cur_node['density'] = np.array(count)
+                cur_node['c'] = np.array(c)
+                # cur_node['c'] = ((c - min_c) /
+                #                  (max_c - min_c + 1e-5) * color_unit_size) // 1
 
                 nodes.append(cur_node)
 
@@ -98,6 +103,7 @@ def func(img, img_name, class_index):
 def img_convert(groundTruth, image):
     gt = scio.loadmat(groundTruth)['groundTruth'][0, 0][0]
     img = cv2.cvtColor(cv2.imread(image), cv2.COLOR_BGR2GRAY)
+    img = cv2.GaussianBlur(img, (5,5), 1) # blur
 
     img_name = image.split('/')[-1].split('.')[0]
 
@@ -106,15 +112,16 @@ def img_convert(groundTruth, image):
         for j in range(480 // 80):
             img_patch = img[i * 80:(i + 1) * 80, j * 80:(j + 1) * 80]
             gt_patch = gt[i * 80:(i + 1) * 80, j * 80:(j + 1) * 80]
-            class_index = 1 if 2 in np.unique(gt_patch) else 0
+            area = gt_patch[5:-5, 5:-5] # throw the edge area
+            class_index = 1 if area[area == 2].sum() / 2 > 20 else 0
             patch_name = img_name + '_{}_{}'.format(i, j)
 
             func(img_patch, patch_name, class_index)
 
-            # cv2.imwrite(
-            #     os.path.join(datasets_root, dataset_name,
-            #                  class_names[class_index], patch_name + '.jpg'),
-            #     img_patch)
+            cv2.imwrite(
+                os.path.join(datasets_root, dataset_name,
+                             class_names[class_index], patch_name + '.jpg'),
+                img_patch)
     print(img_name)
 
 

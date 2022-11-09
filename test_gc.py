@@ -9,7 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 import models
 import metrics
 from utils.train_util import AverageMeter, ProgressMeter
-from utils.data_util import load_data
+from utils.loader import load_data
 
 
 def main():
@@ -23,13 +23,12 @@ def main():
                         default='',
                         type=int,
                         help='in channels')
-    parser.add_argument('--num_classes',
+    parser.add_argument('--n_class',
                         default='',
                         type=int,
                         help='num classes')
     parser.add_argument('--model_dir', default='', type=str, help='model dir')
     parser.add_argument('--data_dir', default='', type=str, help='datas dir')
-    parser.add_argument('--log_dir', default='', type=str, help='log dir')
     parser.add_argument('--device_index',
                         default='0',
                         type=str,
@@ -48,7 +47,6 @@ def main():
     print('DEVICE:', device)
     print('BATCH SIZE:', batch_size)
     print('MODEL DIR:', args.model_dir)
-    print('LOG DIR:', args.log_dir)
     print('-' * 50)
 
     # ----------------------------------------
@@ -69,7 +67,7 @@ def main():
     loss, acc1, auc_ap, class_acc = test(model, test_loader, criterion,
                                          device)
     macc = class_acc().mean()
-    auc, ap = auc_ap(args.num_classes == 2)
+    auc, ap = auc_ap(args.n_class == 2)
 
     torch.save(model, os.path.join(args.model_dir, 'model_ori.pth'))
     print('COMPLETE !!!')
